@@ -26,15 +26,15 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="debug.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="hrcalc.py" />
     <Compile Include="makechart.py">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="max30102.py" />
-    <Compile Include="max30102_calc.py">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="MyPi.py" />
+    <Compile Include="bmpreadoncetime.py" />
   </ItemGroup>
   <ItemGroup>
     <Interpreter Include="env\">
