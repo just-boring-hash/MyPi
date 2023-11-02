@@ -29,5 +29,5 @@ def calc_ir(ir, interval = 25 , reversal = True):
     for i in range(1,len(peaks)):
         peakinv.append(peaks[i] -peaks[i-1])
     me = np.mean(np.array(peakinv))
-    return interval * 60 / me
+    return interval * 60 / me, peaks, peakinv
 

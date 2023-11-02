@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>18c2678a-6ab6-4065-ad02-864c5e87aa8e</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>MyPi.py</StartupFile>
+    <StartupFile>makechart.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
@@ -14,7 +14,7 @@
     <InterpreterId>MSBuild|env|$(MSBuildProjectFullPath)</InterpreterId>
     <IsWindowsApplication>False</IsWindowsApplication>
     <LaunchProvider>Standard Python launcher</LaunchProvider>
-    <CommandLineArguments>-h</CommandLineArguments>
+    <CommandLineArguments>-f irdata_20231102105030_63.csv</CommandLineArguments>
     <EnableNativeCodeDebugging>False</EnableNativeCodeDebugging>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
@@ -27,7 +27,9 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="hrcalc.py" />
-    <Compile Include="hrdump.py" />
+    <Compile Include="makechart.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="max30102.py" />
     <Compile Include="max30102_calc.py">
       <SubType>Code</SubType>
