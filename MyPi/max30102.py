@@ -4,8 +4,8 @@ from time import sleep
 import numpy as np
 from datetime import datetime
 
-import RPi.GPIO as GPIO
-import smbus
+#import RPi.GPIO as GPIO
+#import smbus
 
 # i2c address-es
 # not required?
@@ -44,17 +44,34 @@ REG_PART_ID = 0xFF
 # currently not used
 MAX_BRIGHTNESS = 255
 
+SAMPLES_PER_SECOND_DIC = {50  :0 << 2,
+                          100 :1 << 2,
+                          200 :2 << 2,
+                          400 :3 << 2,
+                          800 :4 << 2,
+                          1000:5 << 2,
+                          1600:6 << 2,
+                          3200:7 << 2}
+
+SAMPLES_AVG_PER_FIFO_DIC = {1 :0 << 5,
+                            2 :1 << 5,
+                            4 :2 << 5,
+                            8 :3 << 5,
+                            16:4 << 5,
+                            32:5 << 5}
 
 class MAX30102():
     # by default, this assumes that physical pin 7 (GPIO 4) is used as interrupt
     # by default, this assumes that the device is at 0x57 on channel 1
-    def __init__(self, channel=1, address=0x57, gpio_pin=7):
-        print("Channel: {0}, address: 0x{1:x}".format(channel, address))
+    def __init__(self,samples_per_second, samples_avg_per_fifo, channel=1, address=0x57, gpio_pin=7):
+        print("[SETUP]Channel: {0}, address: 0x{1:x}".format(channel, address))
         self.address = address
         self.channel = channel
         self.bus = smbus.SMBus(self.channel)
         self.interrupt = gpio_pin
-
+        self.samples_per_second = samples_per_second
+        self.samples_avg_per_fifo = samples_avg_per_fifo
+        print("[SETUP]Data per second = {0}/{1} = {2}".format(samples_per_second,samples_avg_per_fifo,int(samples_per_second/samples_avg_per_fifo)))
         # set gpio mode
         GPIO.setmode(GPIO.BOARD)
         GPIO.setup(self.interrupt, GPIO.IN)
@@ -67,7 +84,7 @@ class MAX30102():
         reg_data = self.bus.read_i2c_block_data(self.address, REG_INTR_STATUS_1, 1)
         # print("[SETUP] reset complete with interrupt register0: {0}".format(reg_data))
         self.setup()
-        # print("[SETUP] setup complete")
+        print("[SETUP] setup complete")
 
     def shutdown(self):
         """
@@ -82,15 +99,15 @@ class MAX30102():
         """
         self.bus.write_i2c_block_data(self.address, REG_MODE_CONFIG, [0x40])
 
-    def setup(self, led_mode=0x03):
+    def setup(self):
         """
         This will setup the device with the values written in sample Arduino code.
         """
         # INTR setting
         # 0xc0 : A_FULL_EN and PPG_RDY_EN = Interrupt will be triggered when
         # fifo almost full & new fifo data ready
-        self.bus.write_i2c_block_data(self.address, REG_INTR_ENABLE_1, [0xc0])
-        self.bus.write_i2c_block_data(self.address, REG_INTR_ENABLE_2, [0x00])
+        self.bus.write_i2c_block_data(self.address, REG_INTR_ENABLE_1, [0xe0])#0xc0
+        self.bus.write_i2c_block_data(self.address, REG_INTR_ENABLE_2, [0x02])#0x00
 
         # FIFO_WR_PTR[4:0]
         self.bus.write_i2c_block_data(self.address, REG_FIFO_WR_PTR, [0x00])
@@ -101,13 +118,13 @@ class MAX30102():
 
         # 0b 0100 1111
         # sample avg = 4, fifo rollover = false, fifo almost full = 17
-        self.bus.write_i2c_block_data(self.address, REG_FIFO_CONFIG, [0x4f])
+        self.bus.write_i2c_block_data(self.address, REG_FIFO_CONFIG, [0x0f | SAMPLES_AVG_PER_FIFO_DIC[self.samples_avg_per_fifo]])
 
-        # 0x02 for read-only, 0x03 for SpO2 mode, 0x07 multimode LED
-        self.bus.write_i2c_block_data(self.address, REG_MODE_CONFIG, [led_mode])
+        # 0x02 for red-only, 0x03 for SpO2 mode, 0x07 multimode LED
+        self.bus.write_i2c_block_data(self.address, REG_MODE_CONFIG, [0x02])#0x03
         # 0b 0010 0111
         # SPO2_ADC range = 4096nA, SPO2 sample rate = 100Hz, LED pulse-width = 411uS
-        self.bus.write_i2c_block_data(self.address, REG_SPO2_CONFIG, [0x27])
+        self.bus.write_i2c_block_data(self.address, REG_SPO2_CONFIG, [0x23 | SAMPLES_PER_SECOND_DIC[self.samples_per_second]])#0x27
 
         # choose value for ~7mA for LED1
         self.bus.write_i2c_block_data(self.address, REG_LED1_PA, [0x24])
@@ -121,7 +138,7 @@ class MAX30102():
     def set_config(self, reg, value):
         self.bus.write_i2c_block_data(self.address, reg, value)
 
-    def read_fifo(self):
+    def read_fifo(self, printflag = False):
         """
         This function will read the data register.
         """
@@ -132,6 +149,13 @@ class MAX30102():
         reg_INTR1 = self.bus.read_i2c_block_data(self.address, REG_INTR_STATUS_1, 1)
         reg_INTR2 = self.bus.read_i2c_block_data(self.address, REG_INTR_STATUS_2, 1)
 
+        if printflag:
+            print("FIFO Almost Full Flag:{0}".format((reg_INTR1 >> 7) & 1))
+            print("New FIFO Data Ready:{0}".format((reg_INTR1 >> 6) & 1))
+            print("Ambient Light Cancellation Overflow:{0}".format((reg_INTR1 >> 5) & 1))
+            print("Power Ready Flag:{0}".format((reg_INTR1 >> 0) & 1))
+            print("Internal Temperature Ready Flag:{0}".format((reg_INTR2 >> 1) & 1))
+
         # read 6-byte data from the device
         d = self.bus.read_i2c_block_data(self.address, REG_FIFO_DATA, 6)
 
@@ -141,7 +165,7 @@ class MAX30102():
 
         return red_led, ir_led
 
-    def read_sequential(self, amount=100):
+    def read_sequential(self, amount=100, printflag = False):
         """
         This function will read the red-led and ir-led `amount` times.
         This works as blocking function.
@@ -154,7 +178,7 @@ class MAX30102():
                 # do nothing here
                 pass
 
-            red, ir = self.read_fifo()
+            red, ir = self.read_fifo(printflag = printflag)
 
             red_buf.append(red)
             ir_buf.append(ir)
@@ -167,7 +191,7 @@ class MAX30102():
             print("get bpm data error:" + e)
             return -999        
         try:
-            hr,peaks,peakinv = calc_ir(ir, reversal = reversal)
+            hr,peaks,peakinv = calc_ir(ir, int(self.samples_per_second/self.samples_avg_per_fifo), reversal = reversal)
         except Exception as e:
             print("calc bpm data error:" + e)
             return -999
@@ -205,7 +229,7 @@ def AMPD(data):
                 p_data[i] += 1
     return np.where(p_data == max_window_length)[0]
 
-def calc_ir(ir, interval = 25 , reversal = True):
+def calc_ir(ir, interval, reversal = True):
     peaks = AMPD(np.array(ir) * (-1 if reversal else 1))
     peakinv = []
     for i in range(1,len(peaks)):
